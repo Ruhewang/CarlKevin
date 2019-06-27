@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[54]:
+# In[1]:
 
 
 import os
@@ -17,15 +17,21 @@ import tensorflow as tf
 from tensorflow.keras import layers
 
 
-# In[55]:
+# In[2]:
 
 
 raw_raw_table = pd.read_csv("./exported_csv/nn_table.csv")
-
 # answer = pd.read_csv("cx_answers.csv")
 
 
-# In[56]:
+# In[4]:
+
+
+# parameter setting
+result_folder_name = "NN55_without0_Yonly_withoutFlightNo&Sector"
+
+
+# In[5]:
 
 
 raw_table = raw_raw_table
@@ -43,7 +49,7 @@ raw_table['rollback_logtime'] = (pd.to_datetime(raw_table.DEP_DATE)-pd.to_dateti
 # test_answer_day = test_answer_day[["FLIGHT_DATE","CX_MEAL_day"]]
 
 
-# In[57]:
+# In[6]:
 
 
 # Exclude typhoon days
@@ -55,7 +61,7 @@ raw_table = raw_table.drop(raw_table[raw_table.DEP_DATE == "2018-08-23"].index)
 raw_table = raw_table.drop(raw_table[raw_table.DEP_DATE == "2018-08-24"].index)
 
 
-# In[58]:
+# In[7]:
 
 
 raw_table['year'] = pd.DatetimeIndex(raw_table['DEP_DATE']).year
@@ -63,31 +69,7 @@ raw_table['month'] = pd.DatetimeIndex(raw_table['DEP_DATE']).month
 raw_table['day'] = pd.DatetimeIndex(raw_table['DEP_DATE']).day
 
 
-# In[59]:
-
-
-list(raw_table)
-
-
-# In[60]:
-
-
-raw_table2.shape
-
-
-# In[61]:
-
-
-# Add weighted book
-BookedWeight = pd.read_csv("./BookQTY_weight.csv")
-BookedWeight["year"] = np.int64([k[0:4] for k in BookedWeight.month])
-BookedWeight["month"] = np.int64([k[6:8] for k in BookedWeight.month])
-raw_table = raw_table.merge(BookedWeight,on= ["year","month"])
-raw_table["weighted_BOOKED_QUANTITY"] = raw_table.weight * raw_table.BOOKED_QUANTITY
-raw_table["weighted_BOOKED_MEAL"] = raw_table.weight * raw_table.BOOKED_MEAL
-
-
-# In[62]:
+# In[8]:
 
 
 def prepare_holidays(raw_table):
@@ -137,7 +119,7 @@ def prepare_holidays(raw_table):
     raw_table['isHolidayRange'] = raw_table.apply(lambda row: getHolidayRange(row), axis=1)
 
 
-# In[63]:
+# In[9]:
 
 
 def prepare_holidays_one_hot(raw_table):
@@ -180,7 +162,7 @@ def prepare_holidays_one_hot(raw_table):
     raw_table['Independence_Day'] = raw_table.apply(lambda row: independence(row), axis=1)
 
 
-# In[64]:
+# In[10]:
 
 
 def prepare_departure_quarterly(raw_table):
@@ -210,7 +192,7 @@ def prepare_departure_quarterly(raw_table):
     raw_table['Evening'] = raw_table.apply(lambda row: evening(row), axis=1)
 
 
-# In[65]:
+# In[11]:
 
 
 def prepare_distances(raw_table):
@@ -227,7 +209,7 @@ def prepare_distances(raw_table):
     raw_table = raw_table.join(distance_one_hot)
 
 
-# In[66]:
+# In[12]:
 
 
 # Potentially long process!
@@ -238,7 +220,7 @@ prepare_departure_quarterly(raw_table)
 prepare_distances(raw_table)
 
 
-# In[67]:
+# In[14]:
 
 
 total_fight_detail = raw_table[["DEP_DATE","FLIGHT_NO","TO_SECTOR","FLIGHT_TIME","SEAT_CLASS",'SECTOR_NO',"PROS_FORECAST","FORECAST_MEAL","weekday","numOfWeek","Freqencyweekly","isPublicHoliday","isHolidayRange","Midnight","Morning", "Afternoon", "Evening", "Distance"]]
@@ -246,47 +228,51 @@ training_fight_detail = total_fight_detail[(total_fight_detail.DEP_DATE >= "2014
 testing_fight_detail = total_fight_detail[(total_fight_detail.DEP_DATE > "2019-04-30") & (total_fight_detail.DEP_DATE <= "2019-05-31")]
 
 
-# In[68]:
+# In[15]:
 
 
-flight_one_hot = pd.get_dummies(raw_table['FLIGHT_NO'],prefix="flightNo")
+flight_one_hot = pd.get_dummies(raw_table['FLIGHT_NO'],prefix="flight")
 #weekday_one_hot = pd.get_dummies(raw_table['weekday'],prefix="weekday")
 # year_one_hot = pd.get_dummies(raw_table['year'],prefix="year")
 # month_one_hot = pd.get_dummies(raw_table['month'],prefix="month")
 # day_one_hot = pd.get_dummies(raw_table['day'],prefix="day")
-sector_one_hot = pd.get_dummies(raw_table['TO_SECTOR'],prefix="sectorCode")
+sector_one_hot = pd.get_dummies(raw_table['TO_SECTOR'],prefix="sector")
 seat_one_hot = pd.get_dummies(raw_table['SEAT_CLASS'],prefix="seat")
 distance_one_hot = pd.get_dummies(raw_table['Distance'], prefix="distance")
 
 
-# In[69]:
+# In[16]:
 
 
 # raw_table = raw_table.join(seat_one_hot)
 raw_table = raw_table.join(distance_one_hot)
-raw_table = raw_table.join(sector_one_hot)
-raw_table = raw_table.join(flight_one_hot)
 
 
-# In[70]:
+# In[17]:
 
+
+# Base variables (DEP_DATE and FINAL_MEAL will be dropped in model)
+base = ['DEP_DATE', 'MAX_SALE_QUANTITY', 'CAPACITY_QUANTITY', 'FORECAST_QUANTITY', 'BOOKED_QUANTITY', 
+        'NO_MEAL_SERVE', 'FINAL_MEAL',
+        'year', 'month', 'day']
 
 # For output purposes only
 default = ['MAX_SALE_QUANTITY', 'CAPACITY_QUANTITY', 'FORECAST_QUANTITY', 'BOOKED_QUANTITY', 'NO_MEAL_SERVE',
            'year', 'month', 'day']
-to_drop = list(raw_table)
+
+s = set(base)
+to_drop = [x for x in list(raw_table) if x not in s]
 
 
-# In[71]:
+# In[18]:
 
 
 class Experiment:
     def __init__(self, exp_no, variables):
-            self._exp_no = exp_no
-            self._variables = variables
-            s = set(self._variables)
-            self._drop_vars = [x for x in to_drop if x not in s]
-
+        self._exp_no = exp_no
+        self._variables = variables
+        s = set(self._variables)
+        self._drop_vars = [x for x in to_drop if x not in s]
         
     def getVariables(self):
         return self._variables
@@ -298,45 +284,31 @@ class Experiment:
         return self._exp_no
 
 
-# In[72]:
+# In[19]:
 
 
 # Shortcuts
-Baseline = ['DEP_DATE','FORECAST_MEAL','FINAL_MEAL']
-base = ['DEP_DATE', 'MAX_SALE_QUANTITY', 'CAPACITY_QUANTITY', 'FORECAST_QUANTITY', 'BOOKED_QUANTITY', 
-        'NO_MEAL_SERVE', 'FINAL_MEAL',
-        'year', 'month', 'day']
-exp2 = ['DEP_DATE', 'MAX_SALE_MEAL', 'CAPACITY_MEAL', 'FORECAST_MEAL', 'BOOKED_MEAL', 
-        'NO_MEAL_SERVE', 'FINAL_MEAL',
-        'year', 'month', 'day']
 holidays = ["Spring_Festival", "Christmas", "Labor_Day", "Independence_Day"]
 departs = ["Midnight", "Morning", "Afternoon", "Evening"]
 distances = ["distance_Long", "distance_Mid", "distance_Short"]
-FLIGHT_NO_1hot= [k for k in list(raw_table) if 'flightNo_' in k]
-SECTOR_1hot= [k for k in list(raw_table) if 'sectorCode_' in k]
 
 # Add list of desired variables to test
 experiments = [
-#   Experiment("000", Baseline)
-#   Experiment("001", base),
-#   Experiment("002", exp2),
-#   Experiment("003", base + ["weekday"]),
-#   Experiment("004", base + FLIGHT_NO_1hot),
-#   Experiment("005", base + SECTOR_1hot),
-#   Experiment("006", base + ["numOfWeek"]),
-#   Experiment("007", base + ["Freqencyweekly"]),
-#   Experiment("008", base + ["isPublicHoliday"]),
-#   Experiment("009", base + ["isHolidayRange"]),
-#   Experiment("010", base + holidays),
-#   Experiment("011", base + departs),
-#   Experiment("012", base + distances),
-  Experiment("013", base + ["weighted_BOOKED_QUANTITY"]),
-#   Experiment("014", base + ["booking_rate"]),
-#   Experiment("015", base + ["rollback_logtime"])
+    Experiment("001", []),
+    Experiment("003", ["weekday"]),
+    Experiment("006", ["numOfWeek"]),
+    Experiment("007", ["Freqencyweekly"]),
+    Experiment("008", ["isPublicHoliday"]),
+    Experiment("009", ["isHolidayRange"]),
+    Experiment("010", [] + holidays),
+    Experiment("011", [] + departs),
+    Experiment("012", [] + distances),
+    Experiment("014", ["booking_rate"]),
+    Experiment("015", ["rollback_logtime"])
 ]
 
 
-# In[73]:
+# In[20]:
 
 
 for exp in experiments:
@@ -367,7 +339,8 @@ for exp in experiments:
     txt_path = os.path.join(detail_directory, 'results.txt')
     with open(txt_path, "w") as text_file:
         text_file.write("Experiment      : {}\n".format(exp.getExpNo()))
-        text_file.write("vars            : {}\n".format(exp.getVariables()))
+        text_file.write("Default vars    : {}\n".format(default))
+        text_file.write("Additional vars : {}\n".format(exp.getVariables()))
         text_file.write("Train date      : {} to {}\n".format(train_start,train_end))
         text_file.write("Test date       : {} to {}\n".format(test_start,test_end))
         text_file.write("-" * 50)
@@ -375,28 +348,18 @@ for exp in experiments:
     
     # Do average over n runs
     for i in range(5):
-  
+        print("Run #" + str(i+1)),
+        
         # Build model
         training_set = model_table[(model_table.DEP_DATE >= train_start) & (model_table.DEP_DATE <= train_end)]
         test_set     = model_table[(model_table.DEP_DATE > test_start) & (model_table.DEP_DATE <= test_end)]
         DEP_DATE_training = training_set.pop('DEP_DATE')
         DEP_DATE_test = test_set.pop('DEP_DATE')
-                
+
         y_train=training_set.pop("FINAL_MEAL")
         X_train=training_set
         y_test=test_set.pop("FINAL_MEAL")
         X_test=test_set
-        
-        if exp.getExpNo() == "000":
-            test_result_table = pd.DataFrame({'prediction':X_test.FORECAST_MEAL, 'truth':y_test})
-            test_result_table = pd.concat([testing_fight_detail.reset_index(drop=True),test_result_table],axis=1)
-            train_result_table = pd.DataFrame({'prediction':X_train.FORECAST_MEAL, 'truth':y_train})
-            train_result_table = pd.concat([training_fight_detail.reset_index(drop=True),train_result_table],axis=1)
-            break
-        
-        print("Run #" + str(i+1)),
-        
-
 
         sc = StandardScaler()
         X_train = sc.fit_transform(X_train)
@@ -575,18 +538,11 @@ for exp in experiments:
             groupByWeekday_test[(groupByWeekday_test.weekday == 7)]['error1_%'].values[0]
         ))
     print("\n")
-    print("Experiment    : {}\n".format(exp.getExpNo()))
     print("Flight error% : {}".format(mae*100))
     print("Flight sd     : {}".format(sd))
     print("Day error%    : {}".format(mae_sumToDay*100))
     print("Day sd        : {}".format(sd_sumToDay))
     print("\n-----EXPERIMENT DONE-----\n")
-
-
-# In[ ]:
-
-
-
 
 
 # In[ ]:
